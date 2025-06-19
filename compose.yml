@@ -49,6 +49,8 @@ services:
 
   transactor:
     image: hardcoreeng/transactor:${HULY_VERSION}
+    ports:
+      - '3333:3333'
     environment:
       - SERVER_PORT=3333
       - SERVER_SECRET=${SECRET}
