@@ -6,14 +6,12 @@ services:
     image: mongo:7-jammy
     volumes:
       - db:/data/db
-    restart: unless-stopped
 
   minio:
     image: minio/minio
     command: server /data --address ":9000" --console-address ":9001"
     volumes:
       - files:/data
-    restart: unless-stopped
 
   elastic:
     image: elasticsearch:7.14.2
@@ -25,18 +23,15 @@ services:
       - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
     volumes:
       - elastic:/usr/share/elasticsearch/data
-    restart: unless-stopped
 
   rekoni:
     image: hardcoreeng/rekoni-service:${HULY_VERSION}
     environment:
       - SECRET=${SECRET}
-    restart: unless-stopped
 
   transactor:
     image: hardcoreeng/transactor:${HULY_VERSION}
     environment:
-      - SERVER_PORT=3333
       - SERVER_SECRET=${SECRET}
       - DB_URL=mongodb://mongodb:27017
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
@@ -46,23 +41,19 @@ services:
       - STATS_URL=https://${HOST_ADDRESS}/_stats
       - MAIL_URL=https://${HOST_ADDRESS}/_mail
       - LAST_NAME_FIRST=true
-    restart: unless-stopped
 
   collaborator:
     image: hardcoreeng/collaborator:${HULY_VERSION}
     environment:
-      - COLLABORATOR_PORT=3078
       - SECRET=${SECRET}
       - ACCOUNTS_URL=https://${HOST_ADDRESS}/_accounts
       - DB_URL=mongodb://mongodb:27017
       - STATS_URL=https://${HOST_ADDRESS}/_stats
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
-    restart: unless-stopped
 
   account:
     image: hardcoreeng/account:${HULY_VERSION}
     environment:
-      - SERVER_PORT=3000
       - SERVER_SECRET=${SECRET}
       - DB_URL=mongodb://mongodb:27017
       - TRANSACTOR_URL=wss://${HOST_ADDRESS}/_transactor
@@ -71,7 +62,6 @@ services:
       - STATS_URL=https://${HOST_ADDRESS}/_stats
       - ACCOUNTS_URL=https://${HOST_ADDRESS}/_accounts
       - MAIL_URL=https://${HOST_ADDRESS}/_mail
-    restart: unless-stopped
 
   workspace:
     image: hardcoreeng/workspace:${HULY_VERSION}
@@ -83,26 +73,20 @@ services:
       - MODEL_ENABLED=*
       - ACCOUNTS_URL=https://${HOST_ADDRESS}/_accounts
       - STATS_URL=https://${HOST_ADDRESS}/_stats
-    restart: unless-stopped
 
   front:
     image: hardcoreeng/front:${HULY_VERSION}
     environment:
-      - SERVER_PORT=8080
       - SERVER_SECRET=${SECRET}
       - LOVE_ENDPOINT=https://${HOST_ADDRESS}/_love
       - ACCOUNTS_URL=https://${HOST_ADDRESS}/_accounts
       - REKONI_URL=https://${HOST_ADDRESS}/_rekoni
-      - CALENDAR_URL=https://${HOST_ADDRESS}/_calendar
-      - GMAIL_URL=https://${HOST_ADDRESS}/_gmail
-      - TELEGRAM_URL=https://${HOST_ADDRESS}/_telegram
       - STATS_URL=https://${HOST_ADDRESS}/_stats
       - UPLOAD_URL=/files
       - ELASTIC_URL=https://${HOST_ADDRESS}/_elastic
       - COLLABORATOR_URL=wss://${HOST_ADDRESS}/_collaborator
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
       - DB_URL=mongodb://mongodb:27017
-      - MONGO_URL=mongodb://mongodb:27017
       - TITLE=${TITLE}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LAST_NAME_FIRST=true
@@ -111,66 +95,50 @@ services:
       - PUSH_PUBLIC_KEY=${PUSH_PUBLIC_KEY}
       - PUSH_PRIVATE_KEY=${PUSH_PRIVATE_KEY}
       - PRESENCE_URL=wss://${HOST_ADDRESS}/_transactor
-    restart: unless-stopped
 
   fulltext:
     image: hardcoreeng/fulltext:${HULY_VERSION}
     environment:
       - SERVER_SECRET=${SECRET}
       - DB_URL=mongodb://mongodb:27017
-      - FULLTEXT_DB_URL=https://${HOST_ADDRESS}/_elastic
+      - ELASTIC_URL=https://${HOST_ADDRESS}/_elastic
       - ELASTIC_INDEX_NAME=huly_storage_index
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
       - REKONI_URL=https://${HOST_ADDRESS}/_rekoni
       - ACCOUNTS_URL=https://${HOST_ADDRESS}/_accounts
       - STATS_URL=https://${HOST_ADDRESS}/_stats
-    restart: unless-stopped
 
   mail:
     image: hardcoreeng/mail:v0.6.501
-    ports:
-      - 8097:8097
     environment:
-      - PORT=8097
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - EMAIL_FROM=${EMAIL_FROM}
       - SOURCE=${EMAIL_FROM}
-    restart: unless-stopped
 
   love:
     image: hardcoreeng/love:v0.6.501
-    container_name: love
-    ports:
-      - 8096:8096
     environment:
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
       - SECRET=${SECRET}
       - ACCOUNTS_URL=https://${HOST_ADDRESS}/_accounts
       - DB_URL=mongodb://mongodb:27017
-      - PORT=8096
       - LIVEKIT_HOST=${LIVEKIT_HOST}
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
-    restart: unless-stopped
 
   ses:
     image: hardcoreeng/ses:v0.6.501
-    ports:
-      - 8095:8095
     environment:
       - PUSH_PUBLIC_KEY=${PUSH_PUBLIC_KEY}
       - PUSH_PRIVATE_KEY=${PUSH_PRIVATE_KEY}
-    restart: unless-stopped
 
   stats:
     image: hardcoreeng/stats:${HULY_VERSION}
     environment:
-      - PORT=4900
       - SERVER_SECRET=${SECRET}
-    restart: unless-stopped
 
 volumes:
   db:
