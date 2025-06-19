@@ -1,14 +1,6 @@
 name: ${DOCKER_NAME}
 version: "3"
 services:
-  nginx:
-    image: "nginx:1.21.3"
-    ports:
-      - "${HTTP_BIND}:${HTTP_PORT}:80"
-    volumes:
-      - ./huly.nginx:/etc/nginx/conf.d
-    restart: unless-stopped
-
   mongodb:
     image: "mongo:7-jammy"
     environment:
@@ -70,7 +62,18 @@ services:
       - STATS_URL=http://stats:4900
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
       - MAIL_URL=http://mail:8097
-
+#test
+    labels:
+      - coolify.managed=true
+      - traefik.http.routers.https-transactor.rule=Host(`team.illunade.de`) && PathPrefix(`/_transactor`)
+      - traefik.http.routers.https-transactor.tls=true
+      - traefik.http.routers.https-transactor.entrypoints=websecure
+      - traefik.http.routers.https-transactor.service=https-transactor
+      - traefik.http.routers.https-transactor.middlewares=https-transactor-strip
+      - traefik.http.middlewares.https-transactor-strip.stripprefix.prefixes=/_transactor
+      - traefik.http.services.https-transactor.loadbalancer.server.port=3333
+      - traefik.http.services.https-transactor.loadbalancer.server.scheme=http
+      - traefik.http.services.https-transactor.loadbalancer.passhostheader=true
     restart: unless-stopped
 
   collaborator:
