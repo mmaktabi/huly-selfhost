@@ -1,14 +1,6 @@
 name: ${DOCKER_NAME}
 version: "3"
 services:
-  nginx:
-    image: "nginx:1.21.3"
-    ports:
-      - "${HTTP_BIND}:${HTTP_PORT}:80"
-    volumes:
-      - ./.huly.nginx:/etc/nginx/conf.d/default.conf
-    restart: unless-stopped
-
   mongodb:
     image: "mongo:7-jammy"
     environment:
@@ -70,6 +62,14 @@ services:
       - STATS_URL=http://stats:4900
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
     restart: unless-stopped
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.transactor.rule=Host(`team.illunade.de`) && (PathPrefix(`/_transactor`) || PathPrefixRegex(`^/eyJ`))"
+      - "traefik.http.middlewares.transactor-strip.stripprefix.prefixes=/_transactor"
+      - "traefik.http.routers.transactor.middlewares=transactor-strip"
+      - "traefik.http.services.transactor.loadbalancer.server.port=3333"
+
 
   collaborator:
     image: hardcoreeng/collaborator:${HULY_VERSION}
@@ -81,6 +81,13 @@ services:
       - STATS_URL=http://stats:4900
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
     restart: unless-stopped
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.collaborator.rule=Host(`team.illunade.de`) && PathPrefix(`/_collaborator`)"
+      - "traefik.http.middlewares.collaborator-strip.stripprefix.prefixes=/_collaborator"
+      - "traefik.http.routers.collaborator.middlewares=collaborator-strip"
+      - "traefik.http.services.collaborator.loadbalancer.server.port=3078"
 
   account:
     image: hardcoreeng/account:${HULY_VERSION}
@@ -97,7 +104,13 @@ services:
       - ACCOUNTS_URL=http://localhost:3000
       - ACCOUNT_PORT=3000
     restart: unless-stopped
-
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.account.rule=Host(`team.illunade.de`) && PathPrefix(`/_accounts`)"
+      - "traefik.http.middlewares.account-stripprefix.stripprefix.prefixes=/_accounts"
+      - "traefik.http.routers.account.middlewares=account-stripprefix"
+      - "traefik.http.services.account.loadbalancer.server.port=3000"
   workspace:
     image: hardcoreeng/workspace:${HULY_VERSION}
     environment:
@@ -134,6 +147,11 @@ services:
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
       - DESKTOP_UPDATES_CHANNEL=selfhost
     restart: unless-stopped
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.front.rule=Host(`team.illunade.de`)"
+      - "traefik.http.services.front.loadbalancer.server.port=8080"
 
   fulltext:
     image: hardcoreeng/fulltext:${HULY_VERSION}
