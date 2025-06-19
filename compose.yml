@@ -6,7 +6,7 @@ services:
     ports:
       - "${HTTP_BIND}:${HTTP_PORT}:80"
     volumes:
-      - ./.huly.nginx:/etc/nginx/conf.d/default.conf
+      - /data/coolify/applications/dg0skckwsk48koo8ggws0o88/.huly.nginx:/etc/nginx/conf.d
     restart: unless-stopped
 
   mongodb:
