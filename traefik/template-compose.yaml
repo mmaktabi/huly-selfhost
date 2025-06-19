@@ -213,11 +213,11 @@ services:
       - traefik.enable=true
       # HTTP → HTTPS
       - traefik.http.routers.front-http.entrypoints=web
-      - traefik.http.routers.front-http.rule=Host(`work.${SERVER_ADDRESS}`)
+      - traefik.http.routers.front-http.rule=Host(`${SERVER_ADDRESS}`)
       - traefik.http.routers.front-http.middlewares=redirect-to-https
       # HTTPS
       - traefik.http.routers.front-https.entrypoints=websecure
-      - traefik.http.routers.front-https.rule=Host(`work.${SERVER_ADDRESS}`)
+      - traefik.http.routers.front-https.rule=Host(`${SERVER_ADDRESS}`)
       - traefik.http.routers.front-https.tls=true
       - traefik.http.routers.front-https.tls.certresolver=letsencrypt
       - traefik.http.services.front.loadbalancer.server.port=8080
