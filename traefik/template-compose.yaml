@@ -53,9 +53,8 @@ services:
     container_name: coolify
     restart: unless-stopped
     environment:
-      <<: *common-env
       # Basis-URL für Coolify – nutzt Ihre SERVER_ADDRESS-Variable
-      - COOLIFY_BASE_URL=https://${SERVER_ADDRESS}
+      - COOLIFY_BASE_URL=https://coolify.illunade.de
       # Deaktiviert den internen NGINX-Proxy von Coolify
       - COOLIFY_DISABLE_MANAGED_PROXY=true
     networks:
@@ -64,7 +63,7 @@ services:
     labels:
       - "traefik.enable=true"
       # HTTPS-Router für Ihre Subdomain
-      - "traefik.http.routers.coolify.rule=Host(`${SERVER_ADDRESS}`)"
+      - "traefik.http.routers.coolify.rule=coolify.illunade.de"
       - "traefik.http.routers.coolify.entrypoints=websecure"
       - "traefik.http.routers.coolify.tls=true"
       - "traefik.http.routers.coolify.tls.certresolver=myresolver"
