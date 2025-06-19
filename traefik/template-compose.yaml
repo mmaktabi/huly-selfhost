@@ -1,3 +1,6 @@
+version: '3.8'
+
+# Gemeinsame Umgebungsvariablen für alle Huly-Services
 x-common-env: &common-env
   SERVER_SECRET: ${HULY_SECRET}
   SECRET: ${HULY_SECRET}
@@ -8,71 +11,8 @@ x-common-env: &common-env
   STATS_URL: http://stats:4900
 
 services:
-  traefik:
-    restart: unless-stopped
-    image: "traefik:v2.10"
-    container_name: "traefik"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - ./letsencrypt:/letsencrypt
-    networks:
-      - traefik-public
-    command:
-      - "--log.level=DEBUG" # set to INFO for production
-      - "--api.insecure=false"
-      - "--api.dashboard=true"
-      - "--global.sendAnonymousUsage=false"
-      - "--global.checkNewVersion=false"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=traefik-public"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--certificatesresolvers.myresolver.acme.email=${LETSENCRYPT_EMAIL}"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-      - "--certificatesresolvers.myresolver.acme.caserver=https://acme-v02.api.letsencrypt.org/directory"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
 
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`${SERVER_ADDRESS}`) && (PathPrefix(`/api`) || PathPrefix(`/traefik`))"
-      - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      # strip prefix for traefik dashboard
-      - "traefik.http.routers.traefik.middlewares=strip-prefix-traefik"
-      - "traefik.http.middlewares.strip-prefix-traefik.stripprefix.prefixes=/traefik"
-      - "traefik.http.routers.traefik.tls=true"
-      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
-  coolify:
-    image: coollabsio/coolify:latest
-    container_name: coolify
-    restart: unless-stopped
-    environment:
-      # Basis-URL für Coolify – nutzt Ihre SERVER_ADDRESS-Variable
-      - COOLIFY_BASE_URL=https://coolify.illunade.de
-      # Deaktiviert den internen NGINX-Proxy von Coolify
-      - COOLIFY_DISABLE_MANAGED_PROXY=true
-    networks:
-      - traefik-public
-      - internal-services
-    labels:
-      - "traefik.enable=true"
-      # HTTPS-Router für Ihre Subdomain
-      - "traefik.http.routers.coolify.rule=coolify.illunade.de"
-      - "traefik.http.routers.coolify.entrypoints=websecure"
-      - "traefik.http.routers.coolify.tls=true"
-      - "traefik.http.routers.coolify.tls.certresolver=myresolver"
-      # Traefik anlernen, dass Coolify intern auf Port 8080 lauscht
-      - "traefik.http.services.coolify.loadbalancer.server.port=8080"
-    volumes:
-      - coolify_data:/data
-
-      
+  # === Datenbank, Storage und Such-Services ===
   mongodb:
     image: mongo:7-jammy
     container_name: mongodb
@@ -83,7 +23,7 @@ services:
     volumes:
       - db:/data/db
     networks:
-      - internal-services
+      - coolify
 
   minio:
     image: minio/minio
@@ -92,7 +32,7 @@ services:
     volumes:
       - files:/data
     networks:
-      - internal-services
+      - coolify
 
   elastic:
     image: elasticsearch:7.14.2
@@ -103,8 +43,6 @@ services:
     volumes:
       - elastic:/usr/share/elasticsearch/data
     environment:
-      - ELASTICSEARCH_PORT_NUMBER=9200
-      - BITNAMI_DEBUG=true
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
       - http.cors.enabled=true
@@ -114,29 +52,25 @@ services:
       retries: 10
       test: curl -s http://localhost:9200/_cluster/health | grep -vq '"status":"red"'
     networks:
-      - internal-services
+      - coolify
 
+  # === Core-Services ===
   rekoni:
     image: hardcoreeng/rekoni-service:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
-    deploy:
-      resources:
-        limits:
-          memory: 500M
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.rekoni.entrypoints=websecure"
-      - "traefik.http.services.rekoni.loadbalancer.server.port=4004"
-      - "traefik.http.routers.rekoni.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/rekoni`)"
-      - "traefik.http.routers.rekoni.middlewares=rekoni-stripprefix"
-      - "traefik.http.middlewares.rekoni-stripprefix.stripprefix.prefixes=/rekoni"
-      - "traefik.http.routers.rekoni.tls=true"
-      - "traefik.http.routers.rekoni.tls.certresolver=myresolver"
+      - traefik.enable=true
+      - traefik.http.routers.rekoni.entrypoints=https
+      - traefik.http.routers.rekoni.rule=Host(${SERVER_ADDRESS}) && PathPrefix(/rekoni)
+      - traefik.http.routers.rekoni.tls=true
+      - traefik.http.routers.rekoni.tls.certresolver=letsencrypt
+      - traefik.http.services.rekoni.loadbalancer.server.port=4004
+      - traefik.http.middlewares.rekoni-stripprefix.stripprefix.prefixes=/rekoni
+      - traefik.http.routers.rekoni.middlewares=rekoni-stripprefix
 
   transactor:
     image: hardcoreeng/transactor:${HULY_VERSION}
@@ -149,32 +83,25 @@ services:
       FULLTEXT_URL: http://fulltext:4700
       LAST_NAME_FIRST: true
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
-      - "traefik.enable=true"
-      # WebSocket route
-      - "traefik.http.routers.transactor-ws.entrypoints=websecure"
-      - "traefik.http.routers.transactor-ws.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/ws/transactor`)"
-      - "traefik.http.routers.transactor-ws.tls=true"
-      - "traefik.http.routers.transactor-ws.tls.certresolver=myresolver"
-      - "traefik.http.services.transactor-ws.loadbalancer.server.port=3333"
-      - "traefik.http.routers.transactor-ws.service=transactor-ws"
-
-      # Strip WebSocket prefix
-      - "traefik.http.routers.transactor-ws.middlewares=strip-transactor-ws-prefix"
-      - "traefik.http.middlewares.strip-transactor-ws-prefix.stripprefix.prefixes=/ws/transactor"
-
-      # HTTP route for non-WebSocket traffic
-      - "traefik.http.routers.transactor.entrypoints=websecure"
-      - "traefik.http.routers.transactor.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/transactor`)"
-      - "traefik.http.routers.transactor.tls=true"
-      - "traefik.http.routers.transactor.tls.certresolver=myresolver"
-      - "traefik.http.services.transactor.loadbalancer.server.port=3333"
-      - "traefik.http.routers.transactor.service=transactor"
-      # Strip HTTP prefix
-      - "traefik.http.routers.transactor.middlewares=strip-transactor-prefix"
-      - "traefik.http.middlewares.strip-transactor-prefix.stripprefix.prefixes=/transactor"
+      - traefik.enable=true
+      # WebSocket
+      - traefik.http.routers.transactor-ws.entrypoints=https
+      - traefik.http.routers.transactor-ws.rule=Host(${SERVER_ADDRESS}) && PathPrefix(/ws/transactor)
+      - traefik.http.routers.transactor-ws.tls=true
+      - traefik.http.routers.transactor-ws.tls.certresolver=letsencrypt
+      - traefik.http.services.transactor-ws.loadbalancer.server.port=3333
+      - traefik.http.routers.transactor-ws.middlewares=strip-transactor-ws-prefix
+      - traefik.http.middlewares.strip-transactor-ws-prefix.stripprefix.prefixes=/ws/transactor
+      # HTTP
+      - traefik.http.routers.transactor.entrypoints=https
+      - traefik.http.routers.transactor.rule=Host(${SERVER_ADDRESS}) && PathPrefix(/transactor)
+      - traefik.http.routers.transactor.tls=true
+      - traefik.http.routers.transactor.tls.certresolver=letsencrypt
+      - traefik.http.services.transactor.loadbalancer.server.port=3333
+      - traefik.http.routers.transactor.middlewares=strip-transactor-prefix
+      - traefik.http.middlewares.strip-transactor-prefix.stripprefix.prefixes=/transactor
 
   collaborator:
     image: hardcoreeng/collaborator:${HULY_VERSION}
@@ -183,31 +110,25 @@ services:
       <<: *common-env
       COLLABORATOR_PORT: 3078
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
-      - "traefik.enable=true"
-      # WebSocket route
-      - "traefik.http.routers.collaborator-ws.entrypoints=websecure"
-      - "traefik.http.routers.collaborator-ws.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/ws/collaborator`)"
-      - "traefik.http.routers.collaborator-ws.tls=true"
-      - "traefik.http.routers.collaborator-ws.tls.certresolver=myresolver"
-      - "traefik.http.services.collaborator-ws.loadbalancer.server.port=3078"
-      - "traefik.http.routers.collaborator-ws.service=collaborator-ws"
-
-      # Strip WebSocket prefix
-      - "traefik.http.routers.collaborator-ws.middlewares=strip-collaborator-ws-prefix"
-      - "traefik.http.middlewares.strip-collaborator-ws-prefix.stripprefix.prefixes=/ws/collaborator"
-      # HTTP route for non-WebSocket traffic
-      - "traefik.http.routers.collaborator.entrypoints=websecure"
-      - "traefik.http.routers.collaborator.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/collaborator`)"
-      - "traefik.http.routers.collaborator.tls=true"
-      - "traefik.http.routers.collaborator.tls.certresolver=myresolver"
-      - "traefik.http.services.collaborator.loadbalancer.server.port=3078"
-
-      # Strip HTTP prefix
-      - "traefik.http.routers.collaborator.middlewares=strip-collaborator-prefix"
-      - "traefik.http.middlewares.strip-collaborator-prefix.stripprefix.prefixes=/collaborator"
+      - traefik.enable=true
+      # WebSocket
+      - traefik.http.routers.collaborator-ws.entrypoints=https
+      - traefik.http.routers.collaborator-ws.rule=Host(${SERVER_ADDRESS}) && PathPrefix(/ws/collaborator)
+      - traefik.http.routers.collaborator-ws.tls=true
+      - traefik.http.routers.collaborator-ws.tls.certresolver=letsencrypt
+      - traefik.http.services.collaborator-ws.loadbalancer.server.port=3078
+      - traefik.http.routers.collaborator-ws.middlewares=strip-collaborator-ws-prefix
+      - traefik.http.middlewares.strip-collaborator-ws-prefix.stripprefix.prefixes=/ws/collaborator
+      # HTTP
+      - traefik.http.routers.collaborator.entrypoints=https
+      - traefik.http.routers.collaborator.rule=Host(${SERVER_ADDRESS}) && PathPrefix(/collaborator)
+      - traefik.http.routers.collaborator.tls=true
+      - traefik.http.routers.collaborator.tls.certresolver=letsencrypt
+      - traefik.http.services.collaborator.loadbalancer.server.port=3078
+      - traefik.http.routers.collaborator.middlewares=strip-collaborator-prefix
+      - traefik.http.middlewares.strip-collaborator-prefix.stripprefix.prefixes=/collaborator
 
   account:
     image: hardcoreeng/account:${HULY_VERSION}
@@ -220,17 +141,16 @@ services:
       MODEL_ENABLED: "*"
       ACCOUNT_PORT: 3000
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.account.entrypoints=websecure"
-      - "traefik.http.services.account.loadbalancer.server.port=3000"
-      - "traefik.http.routers.account.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/accounts`)"
-      - "traefik.http.routers.account.middlewares=account-stripprefix"
-      - "traefik.http.middlewares.account-stripprefix.stripprefix.prefixes=/accounts"
-      - "traefik.http.routers.account.tls=true"
-      - "traefik.http.routers.account.tls.certresolver=myresolver"
+      - traefik.enable=true
+      - traefik.http.routers.account.entrypoints=https
+      - traefik.http.routers.account.rule=Host(${SERVER_ADDRESS}) && PathPrefix(/accounts)
+      - traefik.http.routers.account.tls=true
+      - traefik.http.routers.account.tls.certresolver=letsencrypt
+      - traefik.http.services.account.loadbalancer.server.port=3000
+      - traefik.http.middlewares.account-stripprefix.stripprefix.prefixes=/accounts
+      - traefik.http.routers.account.middlewares=account-stripprefix
 
   workspace:
     image: hardcoreeng/workspace:${HULY_VERSION}
@@ -240,7 +160,7 @@ services:
       TRANSACTOR_URL: ws://transactor:3333;wss://${SERVER_ADDRESS}/ws/transactor
       MODEL_ENABLED: "*"
     networks:
-      - internal-services
+      - coolify
 
   front:
     image: hardcoreeng/front:${HULY_VERSION}
@@ -262,15 +182,14 @@ services:
       LAST_NAME_FIRST: true
       DESKTOP_UPDATES_CHANNEL: selfhost
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.front.entrypoints=websecure"
-      - "traefik.http.services.front.loadbalancer.server.port=8080"
-      - "traefik.http.routers.front.rule=Host(`${SERVER_ADDRESS}`)"
-      - "traefik.http.routers.front.tls=true"
-      - "traefik.http.routers.front.tls.certresolver=myresolver"
+      - traefik.enable=true
+      - traefik.http.routers.front.entrypoints=https
+      - traefik.http.routers.front.rule=Host(${SERVER_ADDRESS})
+      - traefik.http.routers.front.tls=true
+      - traefik.http.routers.front.tls.certresolver=letsencrypt
+      - traefik.http.services.front.loadbalancer.server.port=8080
 
   fulltext:
     image: hardcoreeng/fulltext:${HULY_VERSION}
@@ -281,7 +200,7 @@ services:
       ELASTIC_INDEX_NAME: huly_storage_index
       REKONI_URL: http://rekoni:4004
     networks:
-      - internal-services
+      - coolify
 
   stats:
     image: hardcoreeng/stats:${HULY_VERSION}
@@ -290,27 +209,22 @@ services:
       <<: *common-env
       PORT: 4900
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.stats.entrypoints=websecure"
-      - "traefik.http.services.stats.loadbalancer.server.port=4900"
-      - "traefik.http.routers.stats.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/stats`)"
-      - "traefik.http.routers.stats.middlewares=stats-stripprefix"
-      - "traefik.http.middlewares.stats-stripprefix.stripprefix.prefixes=/stats"
-      - "traefik.http.routers.stats.tls=true"
-      - "traefik.http.routers.stats.tls.certresolver=myresolver"
+      - traefik.enable=true
+      - traefik.http.routers.stats.entrypoints=https
+      - traefik.http.routers.stats.rule=Host(${SERVER_ADDRESS}) && PathPrefix(/stats)
+      - traefik.http.routers.stats.tls=true
+      - traefik.http.routers.stats.tls.certresolver=letsencrypt
+      - traefik.http.services.stats.loadbalancer.server.port=4900
+      - traefik.http.middlewares.stats-stripprefix.stripprefix.prefixes=/stats
+      - traefik.http.routers.stats.middlewares=stats-stripprefix
 
 networks:
-  traefik-public:
-    name: traefik-public
-  internal-services:
-    name: internal-services
+  coolify:
+    external: true
 
 volumes:
   db:
   elastic:
   files:
-  letsencrypt:
-  coolify_data:
