@@ -94,35 +94,36 @@ services:
     labels:
       - traefik.enable=true
 
-      # WebSocket → Upgrade auf wss://transactor.work.illunade.de/ws/transactor/<token>
-      - traefik.http.routers.transactor-ws.entrypoints=websecure
+      # WebSocket (WSS) über HTTPS-Entrypoint
+      - traefik.http.routers.transactor-ws.entrypoints=https
       - traefik.http.routers.transactor-ws.rule=Host(`transactor.${SERVER_ADDRESS}`) && PathPrefix(`/ws/transactor`)
       - traefik.http.routers.transactor-ws.tls=true
       - traefik.http.routers.transactor-ws.tls.certresolver=letsencrypt
       - traefik.http.services.transactor-ws.loadbalancer.server.port=3333
 
-      # Regex-Strip-Middleware für alle Pfade unter /ws/transactor
+      # Strip-Prefix via Regex (entfernt /ws/transactor und token)
       - traefik.http.middlewares.strip-ws-tx-stripper.stripprefixregex.regex=^/ws/transactor
       - traefik.http.routers.transactor-ws.middlewares=strip-ws-tx-stripper
 
-      # REST-API HTTP → HTTPS Redirect
-      - traefik.http.routers.transactor-http.entrypoints=web
+      # REST API HTTP → HTTPS Redirect
+      - traefik.http.routers.transactor-http.entrypoints=http
       - traefik.http.routers.transactor-http.rule=Host(`transactor.${SERVER_ADDRESS}`) && PathPrefix(`/transactor`)
       - traefik.http.routers.transactor-http.middlewares=redirect-to-https
 
-      # REST-API HTTPS
-      - traefik.http.routers.transactor-https.entrypoints=websecure
+      # REST API über HTTPS
+      - traefik.http.routers.transactor-https.entrypoints=https
       - traefik.http.routers.transactor-https.rule=Host(`transactor.${SERVER_ADDRESS}`) && PathPrefix(`/transactor`)
       - traefik.http.routers.transactor-https.tls=true
       - traefik.http.routers.transactor-https.tls.certresolver=letsencrypt
       - traefik.http.services.transactor.loadbalancer.server.port=3333
 
-      # Strip-Prefix für REST-API
+      # Strip-Prefix für REST
       - traefik.http.middlewares.strip-http-tx.stripprefix.prefixes=/transactor
       - traefik.http.routers.transactor-https.middlewares=strip-http-tx
 
-      # Globale Redirect-Middleware
+      # generelles Redirect-Middleware
       - traefik.http.middlewares.redirect-to-https.redirectScheme.scheme=https
+
 
 
   collaborator:
