@@ -1,8 +1,9 @@
 version: '3.8'
 
+# Gemeinsame Umgebungsvariablen für alle Huly-Services
 x-common-env: &common-env
-  SERVER_SECRET: your-secure-secret
-  SECRET: your-secure-secret
+  SERVER_SECRET: ${HULY_SECRET}
+  SECRET: ${HULY_SECRET}
   STORAGE_CONFIG: minio|minio?accessKey=minioadmin&secretKey=minioadmin
   MONGO_URL: mongodb://mongodb:27017
   DB_URL: mongodb://mongodb:27017
@@ -11,6 +12,7 @@ x-common-env: &common-env
 
 services:
 
+  # === Datenbank, Storage und Such-Services ===
   mongodb:
     image: mongo:7-jammy
     container_name: mongodb
@@ -36,12 +38,11 @@ services:
     image: elasticsearch:7.14.2
     restart: unless-stopped
     command: |
-      /bin/sh -c "./bin/elasticsearch-plugin list | grep -q ingest-attachment || yes | ./bin/elasticsearch-plugin install --silent ingest-attachment; /usr/local/bin/docker-entrypoint.sh eswrapper"
+      /bin/sh -c "./bin/elasticsearch-plugin list | grep -q ingest-attachment || yes | ./bin/elasticsearch-plugin install --silent ingest-attachment;
+      /usr/local/bin/docker-entrypoint.sh eswrapper"
     volumes:
       - elastic:/usr/share/elasticsearch/data
     environment:
-      - ELASTICSEARCH_PORT_NUMBER=9200
-      - BITNAMI_DEBUG=true
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
       - http.cors.enabled=true
@@ -53,30 +54,27 @@ services:
     networks:
       - internal-services
 
+  # === Core-Services ===
   rekoni:
-    image: hardcoreeng/rekoni-service:latest
+    image: hardcoreeng/rekoni-service:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
-    deploy:
-      resources:
-        limits:
-          memory: 500M
     networks:
       - internal-services
+      - coolify
     labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.rekoni.entrypoints=https"
-      - "traefik.http.routers.rekoni.rule=Host(`team.illunade.de`) && PathPrefix(`/rekoni`)"
-      - "traefik.http.services.rekoni.loadbalancer.server.port=4004"
-      - "traefik.http.routers.rekoni.middlewares=rekoni-stripprefix"
-      - "traefik.http.middlewares.rekoni-stripprefix.stripprefix.prefixes=/rekoni"
-      - "traefik.http.routers.rekoni.tls=true"
-      - "traefik.http.routers.rekoni.tls.certresolver=letsencrypt"
+      - traefik.enable=true
+      - traefik.http.routers.rekoni.entrypoints=https
+      - traefik.http.routers.rekoni.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/rekoni`)
+      - traefik.http.routers.rekoni.tls=true
+      - traefik.http.routers.rekoni.tls.certresolver=letsencrypt
+      - traefik.http.services.rekoni.loadbalancer.server.port=4004
+      - traefik.http.middlewares.rekoni-stripprefix.stripprefix.prefixes=/rekoni
+      - traefik.http.routers.rekoni.middlewares=rekoni-stripprefix
 
   transactor:
-    image: hardcoreeng/transactor:latest
+    image: hardcoreeng/transactor:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
@@ -87,97 +85,119 @@ services:
       LAST_NAME_FIRST: true
     networks:
       - internal-services
+      - coolify
     labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.transactor.entrypoints=https"
-      - "traefik.http.routers.transactor.rule=Host(`team.illunade.de`) && PathPrefix(`/transactor`)"
-      - "traefik.http.services.transactor.loadbalancer.server.port=3333"
-      - "traefik.http.routers.transactor.middlewares=strip-transactor-prefix"
-      - "traefik.http.middlewares.strip-transactor-prefix.stripprefix.prefixes=/transactor"
-      - "traefik.http.routers.transactor.tls=true"
-      - "traefik.http.routers.transactor.tls.certresolver=letsencrypt"
+      - traefik.enable=true
+      # WebSocket
+      - traefik.http.routers.transactor-ws.entrypoints=https
+      - traefik.http.routers.transactor-ws.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/ws/transactor`)
+      - traefik.http.routers.transactor-ws.tls=true
+      - traefik.http.routers.transactor-ws.tls.certresolver=letsencrypt
+      - traefik.http.services.transactor-ws.loadbalancer.server.port=3333
+      - traefik.http.routers.transactor-ws.middlewares=strip-transactor-ws-prefix
+      - traefik.http.middlewares.strip-transactor-ws-prefix.stripprefix.prefixes=/ws/transactor
+      # HTTP
+      - traefik.http.routers.transactor.entrypoints=https
+      - traefik.http.routers.transactor.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/transactor`)
+      - traefik.http.routers.transactor.tls=true
+      - traefik.http.routers.transactor.tls.certresolver=letsencrypt
+      - traefik.http.services.transactor.loadbalancer.server.port=3333
+      - traefik.http.routers.transactor.middlewares=strip-transactor-prefix
+      - traefik.http.middlewares.strip-transactor-prefix.stripprefix.prefixes=/transactor
 
   collaborator:
-    image: hardcoreeng/collaborator:latest
+    image: hardcoreeng/collaborator:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
       COLLABORATOR_PORT: 3078
     networks:
       - internal-services
+      - coolify
     labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.collaborator.entrypoints=https"
-      - "traefik.http.routers.collaborator.rule=Host(`team.illunade.de`) && PathPrefix(`/collaborator`)"
-      - "traefik.http.services.collaborator.loadbalancer.server.port=3078"
-      - "traefik.http.routers.collaborator.middlewares=strip-collaborator-prefix"
-      - "traefik.http.middlewares.strip-collaborator-prefix.stripprefix.prefixes=/collaborator"
-      - "traefik.http.routers.collaborator.tls=true"
-      - "traefik.http.routers.collaborator.tls.certresolver=letsencrypt"
+      - traefik.enable=true
+      # WebSocket
+      - traefik.http.routers.collaborator-ws.entrypoints=https
+      - traefik.http.routers.collaborator-ws.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/ws/collaborator`)
+      - traefik.http.routers.collaborator-ws.tls=true
+      - traefik.http.routers.collaborator-ws.tls.certresolver=letsencrypt
+      - traefik.http.services.collaborator-ws.loadbalancer.server.port=3078
+      - traefik.http.routers.collaborator-ws.middlewares=strip-collaborator-ws-prefix
+      - traefik.http.middlewares.strip-collaborator-ws-prefix.stripprefix.prefixes=/ws/collaborator
+      # HTTP
+      - traefik.http.routers.collaborator.entrypoints=https
+      - traefik.http.routers.collaborator.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/collaborator`)
+      - traefik.http.routers.collaborator.tls=true
+      - traefik.http.routers.collaborator.tls.certresolver=letsencrypt
+      - traefik.http.services.collaborator.loadbalancer.server.port=3078
+      - traefik.http.routers.collaborator.middlewares=strip-collaborator-prefix
+      - traefik.http.middlewares.strip-collaborator-prefix.stripprefix.prefixes=/collaborator
 
   account:
-    image: hardcoreeng/account:latest
+    image: hardcoreeng/account:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
       SERVER_PORT: 3000
-      TRANSACTOR_URL: ws://transactor:3333;wss://team.illunade.de/transactor
+      TRANSACTOR_URL: ws://transactor:3333;wss://${SERVER_ADDRESS}/ws/transactor
       FRONT_URL: http://front:8080
       MODEL_ENABLED: "*"
       ACCOUNT_PORT: 3000
     networks:
       - internal-services
+      - coolify
     labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.account.entrypoints=https"
-      - "traefik.http.routers.account.rule=Host(`team.illunade.de`) && PathPrefix(`/accounts`)"
-      - "traefik.http.services.account.loadbalancer.server.port=3000"
-      - "traefik.http.routers.account.middlewares=account-stripprefix"
-      - "traefik.http.middlewares.account-stripprefix.stripprefix.prefixes=/accounts"
-      - "traefik.http.routers.account.tls=true"
-      - "traefik.http.routers.account.tls.certresolver=letsencrypt"
+      - traefik.enable=true
+      - traefik.http.routers.account.entrypoints=https
+      - traefik.http.routers.account.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/accounts`)
+      - traefik.http.routers.account.tls=true
+      - traefik.http.routers.account.tls.certresolver=letsencrypt
+      - traefik.http.services.account.loadbalancer.server.port=3000
+      - traefik.http.middlewares.account-stripprefix.stripprefix.prefixes=/accounts
+      - traefik.http.routers.account.middlewares=account-stripprefix
 
   workspace:
-    image: hardcoreeng/workspace:latest
+    image: hardcoreeng/workspace:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
-      TRANSACTOR_URL: ws://transactor:3333;wss://team.illunade.de/transactor
+      TRANSACTOR_URL: ws://transactor:3333;wss://${SERVER_ADDRESS}/ws/transactor
       MODEL_ENABLED: "*"
     networks:
       - internal-services
 
   front:
-    image: hardcoreeng/front:latest
+    image: hardcoreeng/front:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
       SERVER_PORT: 8080
-      ACCOUNTS_URL: https://team.illunade.de/accounts
-      REKONI_URL: https://team.illunade.de/rekoni
-      STATS_URL: https://team.illunade.de/stats
+      ACCOUNTS_URL: https://${SERVER_ADDRESS}/accounts
+      REKONI_URL: https://${SERVER_ADDRESS}/rekoni
+      CALENDAR_URL: https://${SERVER_ADDRESS}:8095
+      GMAIL_URL: https://${SERVER_ADDRESS}:8088
+      TELEGRAM_URL: https://${SERVER_ADDRESS}:8086
+      STATS_URL: https://${SERVER_ADDRESS}/stats
+      UPLOAD_URL: /files
       ELASTIC_URL: http://elastic:9200
-      COLLABORATOR_URL: wss://team.illunade.de/collaborator
+      COLLABORATOR_URL: wss://${SERVER_ADDRESS}/ws/collaborator
       TITLE: Huly Self Host
       DEFAULT_LANGUAGE: en
       LAST_NAME_FIRST: true
       DESKTOP_UPDATES_CHANNEL: selfhost
     networks:
       - internal-services
+      - coolify
     labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.front.entrypoints=https"
-      - "traefik.http.routers.front.rule=Host(`team.illunade.de`)"
-      - "traefik.http.services.front.loadbalancer.server.port=8080"
-      - "traefik.http.routers.front.tls=true"
-      - "traefik.http.routers.front.tls.certresolver=letsencrypt"
+      - traefik.enable=true
+      - traefik.http.routers.front.entrypoints=https
+      - traefik.http.routers.front.rule=Host(`${SERVER_ADDRESS}`)
+      - traefik.http.routers.front.tls=true
+      - traefik.http.routers.front.tls.certresolver=letsencrypt
+      - traefik.http.services.front.loadbalancer.server.port=8080
 
   fulltext:
-    image: hardcoreeng/fulltext:latest
+    image: hardcoreeng/fulltext:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
@@ -188,30 +208,31 @@ services:
       - internal-services
 
   stats:
-    image: hardcoreeng/stats:latest
+    image: hardcoreeng/stats:${HULY_VERSION}
     restart: unless-stopped
     environment:
       <<: *common-env
       PORT: 4900
     networks:
       - internal-services
+      - coolify
     labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.stats.entrypoints=https"
-      - "traefik.http.routers.stats.rule=Host(`team.illunade.de`) && PathPrefix(`/stats`)"
-      - "traefik.http.services.stats.loadbalancer.server.port=4900"
-      - "traefik.http.routers.stats.middlewares=stats-stripprefix"
-      - "traefik.http.middlewares.stats-stripprefix.stripprefix.prefixes=/stats"
-      - "traefik.http.routers.stats.tls=true"
-      - "traefik.http.routers.stats.tls.certresolver=letsencrypt"
+      - traefik.enable=true
+      - traefik.http.routers.stats.entrypoints=https
+      - traefik.http.routers.stats.rule=Host(`${SERVER_ADDRESS}`) && PathPrefix(`/stats`)
+      - traefik.http.routers.stats.tls=true
+      - traefik.http.routers.stats.tls.certresolver=letsencrypt
+      - traefik.http.services.stats.loadbalancer.server.port=4900
+      - traefik.http.middlewares.stats-stripprefix.stripprefix.prefixes=/stats
+      - traefik.http.routers.stats.middlewares=stats-stripprefix
+
+networks:
+  internal-services:
+    name: internal-services
+  coolify:
+    external: true
 
 volumes:
   db:
   elastic:
   files:
-
-networks:
-  internal-services:
-    external: true
-    name: coolify
