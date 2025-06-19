@@ -213,4 +213,5 @@ volumes:
 
 networks:
   internal-services:
+    external: true
     name: coolify
