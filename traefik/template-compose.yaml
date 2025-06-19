@@ -23,7 +23,7 @@ services:
     volumes:
       - db:/data/db
     networks:
-      - internal-services
+      - coolify
 
   minio:
     image: minio/minio
@@ -32,7 +32,7 @@ services:
     volumes:
       - files:/data
     networks:
-      - internal-services
+      - coolify
 
   elastic:
     image: elasticsearch:7.14.2
@@ -54,7 +54,7 @@ services:
       retries: 10
       test: curl -s http://localhost:9200/_cluster/health | grep -vq '"status":"red"'
     networks:
-      - internal-services
+      - coolify
 
   # === Core-Services mit Subdomain-Routing ===
   rekoni:
@@ -63,8 +63,7 @@ services:
     environment:
       <<: *common-env
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
       - traefik.enable=true
       # HTTP → HTTPS
@@ -91,8 +90,7 @@ services:
       FULLTEXT_URL: http://fulltext:4700
       LAST_NAME_FIRST: true
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
       - traefik.enable=true
       # WebSocket
@@ -124,8 +122,7 @@ services:
       <<: *common-env
       COLLABORATOR_PORT: 3078
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
       - traefik.enable=true
       # WebSocket
@@ -161,8 +158,7 @@ services:
       MODEL_ENABLED: "*"
       ACCOUNT_PORT: 3000
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
       - traefik.enable=true
       # HTTP → HTTPS
@@ -185,7 +181,7 @@ services:
       TRANSACTOR_URL: ws://transactor:3333;wss://transactor.${SERVER_ADDRESS}/ws/transactor
       MODEL_ENABLED: "*"
     networks:
-      - internal-services
+      - coolify
 
   front:
     image: hardcoreeng/front:${HULY_VERSION}
@@ -207,8 +203,7 @@ services:
       LAST_NAME_FIRST: true
       DESKTOP_UPDATES_CHANNEL: selfhost
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
       - traefik.enable=true
       # HTTP → HTTPS
@@ -232,7 +227,7 @@ services:
       ELASTIC_INDEX_NAME: huly_storage_index
       REKONI_URL: http://rekoni:4004
     networks:
-      - internal-services
+      - coolify
 
   stats:
     image: hardcoreeng/stats:${HULY_VERSION}
@@ -241,8 +236,7 @@ services:
       <<: *common-env
       PORT: 4900
     networks:
-      - internal-services
-      - traefik-public
+      - coolify
     labels:
       - traefik.enable=true
       # HTTP → HTTPS
@@ -256,13 +250,11 @@ services:
       - traefik.http.routers.stats-https.tls.certresolver=letsencrypt
       - traefik.http.services.stats.loadbalancer.server.port=4900
       - traefik.http.middlewares.redirect-to-https.redirectScheme.scheme=https
-
 networks:
-  traefik-public:
-    external: true
   internal-services:
+    name: internal-services
+  coolify:
     external: true
-
 volumes:
   db:
   elastic:
