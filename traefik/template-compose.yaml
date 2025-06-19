@@ -93,27 +93,37 @@ services:
       - coolify
     labels:
       - traefik.enable=true
-      # WebSocket
+
+      # WebSocket → Upgrade auf wss://transactor.work.illunade.de/ws/transactor/<token>
       - traefik.http.routers.transactor-ws.entrypoints=websecure
       - traefik.http.routers.transactor-ws.rule=Host(`transactor.${SERVER_ADDRESS}`) && PathPrefix(`/ws/transactor`)
       - traefik.http.routers.transactor-ws.tls=true
       - traefik.http.routers.transactor-ws.tls.certresolver=letsencrypt
       - traefik.http.services.transactor-ws.loadbalancer.server.port=3333
-      - traefik.http.routers.transactor-ws.middlewares=strip-ws-tx
-      - traefik.http.middlewares.strip-ws-tx.stripprefix.prefixes=/ws/transactor
-      # HTTP → HTTPS
+
+      # Regex-Strip-Middleware für alle Pfade unter /ws/transactor
+      - traefik.http.middlewares.strip-ws-tx-stripper.stripprefixregex.regex=^/ws/transactor
+      - traefik.http.routers.transactor-ws.middlewares=strip-ws-tx-stripper
+
+      # REST-API HTTP → HTTPS Redirect
       - traefik.http.routers.transactor-http.entrypoints=web
       - traefik.http.routers.transactor-http.rule=Host(`transactor.${SERVER_ADDRESS}`) && PathPrefix(`/transactor`)
       - traefik.http.routers.transactor-http.middlewares=redirect-to-https
-      # HTTPS
+
+      # REST-API HTTPS
       - traefik.http.routers.transactor-https.entrypoints=websecure
       - traefik.http.routers.transactor-https.rule=Host(`transactor.${SERVER_ADDRESS}`) && PathPrefix(`/transactor`)
       - traefik.http.routers.transactor-https.tls=true
       - traefik.http.routers.transactor-https.tls.certresolver=letsencrypt
       - traefik.http.services.transactor.loadbalancer.server.port=3333
-      - traefik.http.routers.transactor-https.middlewares=strip-http-tx
+
+      # Strip-Prefix für REST-API
       - traefik.http.middlewares.strip-http-tx.stripprefix.prefixes=/transactor
+      - traefik.http.routers.transactor-https.middlewares=strip-http-tx
+
+      # Globale Redirect-Middleware
       - traefik.http.middlewares.redirect-to-https.redirectScheme.scheme=https
+
 
   collaborator:
     image: hardcoreeng/collaborator:${HULY_VERSION}
