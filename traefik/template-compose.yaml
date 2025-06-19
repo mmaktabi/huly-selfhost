@@ -35,8 +35,9 @@ services:
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
       - "--certificatesresolvers.myresolver.acme.email=${LETSENCRYPT_EMAIL}"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.myresolver.acme.caserver=http://acme-staging-v02.api.letsencrypt.org/directory" # For testing, comment out for production
+      - "--certificatesresolvers.myresolver.acme.caserver=https://acme-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`${SERVER_ADDRESS}`) && (PathPrefix(`/api`) || PathPrefix(`/traefik`))"
@@ -47,7 +48,32 @@ services:
       - "traefik.http.middlewares.strip-prefix-traefik.stripprefix.prefixes=/traefik"
       - "traefik.http.routers.traefik.tls=true"
       - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+  coolify:
+    image: coollabsio/coolify:latest
+    container_name: coolify
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      # Basis-URL für Coolify – nutzt Ihre SERVER_ADDRESS-Variable
+      - COOLIFY_BASE_URL=https://${SERVER_ADDRESS}
+      # Deaktiviert den internen NGINX-Proxy von Coolify
+      - COOLIFY_DISABLE_MANAGED_PROXY=true
+    networks:
+      - traefik-public
+      - internal-services
+    labels:
+      - "traefik.enable=true"
+      # HTTPS-Router für Ihre Subdomain
+      - "traefik.http.routers.coolify.rule=Host(`${SERVER_ADDRESS}`)"
+      - "traefik.http.routers.coolify.entrypoints=websecure"
+      - "traefik.http.routers.coolify.tls=true"
+      - "traefik.http.routers.coolify.tls.certresolver=myresolver"
+      # Traefik anlernen, dass Coolify intern auf Port 8080 lauscht
+      - "traefik.http.services.coolify.loadbalancer.server.port=8080"
+    volumes:
+      - coolify_data:/data
 
+      
   mongodb:
     image: mongo:7-jammy
     container_name: mongodb
@@ -288,3 +314,4 @@ volumes:
   elastic:
   files:
   letsencrypt:
+  coolify_data:
