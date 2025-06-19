@@ -182,16 +182,6 @@ services:
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
     restart: unless-stopped
 
-
-  ses:
-    image: hardcoreeng/ses:v0.6.501
-    ports:
-      - 8095:8095
-    environment:
-      - PUSH_PUBLIC_KEY=${PUSH_PUBLIC_KEY}
-      - PUSH_PRIVATE_KEY=${PUSH_PRIVATE_KEY}
-    restart: unless-stopped
-
   stats:
     image: hardcoreeng/stats:${HULY_VERSION}
     environment:
